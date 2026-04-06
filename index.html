@@ -31,7 +31,14 @@
             justify-content: center;
             align-items: center;
             height: 100%;
-            min-height: 0; /* flex 자식의 최소 높이 해제 */
+            min-height: 0;
+        }
+
+        .category-group {
+            background-color: rgba(255, 255, 255, 0.4);
+            border-radius: 1.5rem;
+            padding: 1rem;
+            border: 1px solid rgba(226, 232, 240, 0.8);
         }
 
         .loading-spinner {
@@ -118,7 +125,7 @@
             </div>
         </section>
 
-        <!-- Step 3: Voting Interface (Full screen Tally - No Scroll Focus) -->
+        <!-- Step 3: Voting Interface (Full screen Tally - Grouped by Category) -->
         <section id="voting-section" class="hidden flex-1 flex flex-col overflow-hidden h-full">
             <div class="flex justify-between items-center mb-4 shrink-0 bg-white p-3 md:p-4 rounded-3xl shadow-sm border border-slate-100">
                 <div>
@@ -132,9 +139,9 @@
                 </button>
             </div>
 
-            <!-- Tally Grid: Flex based for automatic distribution -->
-            <div id="vote-tally-grid" class="flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 overflow-hidden">
-                <!-- Tallying Items -->
+            <!-- Tally Group Container: Area for grouped categories -->
+            <div id="vote-tally-grid" class="flex-1 flex flex-col gap-6 overflow-y-auto scroll-area pr-2">
+                <!-- Grouped Category Sections will be injected here -->
             </div>
 
             <div id="result-transfer-area" class="hidden shrink-0 mt-3 bg-slate-900 text-white p-4 md:p-5 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-3 animate-bounce">
@@ -260,34 +267,60 @@
             document.getElementById('voting-section').classList.remove('hidden');
             document.getElementById('current-class-display').innerText = `${config.grade}학년 ${config.class}반 개표 현황`;
 
-            const grid = document.getElementById('vote-tally-grid');
-            grid.innerHTML = '';
+            const mainGrid = document.getElementById('vote-tally-grid');
+            mainGrid.innerHTML = '';
 
-            // 후보자 수에 따라 그리드 컬럼 동적 최적화 (모바일/데스크탑 대응)
-            const count = candidates.length;
-            if(count <= 4) {
-                grid.className = "flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden";
-            } else if(count <= 8) {
-                grid.className = "flex-1 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-hidden";
-            } else {
-                grid.className = "flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 overflow-hidden";
+            // 1. 분야별 그룹화 (Group by category)
+            const groupedCandidates = {};
+            candidates.forEach(c => {
+                if (!groupedCandidates[c.category]) {
+                    groupedCandidates[c.category] = [];
+                }
+                groupedCandidates[c.category].push(c);
+            });
+
+            // 2. 그룹별 섹션 생성
+            for (const category in groupedCandidates) {
+                const section = document.createElement('div');
+                section.className = "category-group shadow-sm";
+                
+                const title = document.createElement('h3');
+                title.className = "text-sm md:text-base font-black text-slate-600 mb-3 ml-1 flex items-center gap-2";
+                title.innerHTML = `<span class="w-1.5 h-4 bg-indigo-500 rounded-full"></span> ${category}`;
+                section.appendChild(title);
+
+                const itemGrid = document.createElement('div');
+                const catCandidates = groupedCandidates[category];
+                
+                // 그룹 내 후보자 수에 따른 그리드 조절
+                if (catCandidates.length === 1) {
+                    itemGrid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3";
+                } else if (catCandidates.length <= 4) {
+                    itemGrid.className = "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3";
+                } else {
+                    itemGrid.className = "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2";
+                }
+
+                catCandidates.forEach(c => {
+                    votes[c.name] = 0;
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-slate-100 tally-card relative";
+                    card.innerHTML = `
+                        <div class="text-[9px] md:text-[10px] text-indigo-500 font-black mb-0.5 uppercase tracking-tighter">기호 ${c.number}번</div>
+                        <div class="text-sm md:text-lg font-extrabold text-slate-800 mb-1 truncate w-full text-center">${c.name}</div>
+                        <div class="text-3xl md:text-5xl font-black text-indigo-600 mb-3 md:mb-4" id="count-${c.name}">0</div>
+                        <div class="flex gap-1.5 w-full">
+                            <button onclick="changeVote('${c.name}', 1)" class="vote-btn flex-1 bg-slate-900 text-white py-2 md:py-3 rounded-xl text-sm md:text-lg font-bold shadow-md">+1</button>
+                            <button onclick="changeVote('${c.name}', -1)" class="vote-btn w-10 md:w-12 bg-slate-100 text-slate-400 rounded-xl font-bold">-</button>
+                        </div>
+                    `;
+                    itemGrid.appendChild(card);
+                });
+                
+                section.appendChild(itemGrid);
+                mainGrid.appendChild(section);
             }
 
-            candidates.forEach(c => {
-                votes[c.name] = 0;
-                const item = document.createElement('div');
-                item.className = "bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-slate-100 tally-card relative";
-                item.innerHTML = `
-                    <div class="text-[9px] md:text-[10px] text-indigo-500 font-black mb-0.5">${c.category}</div>
-                    <div class="text-sm md:text-lg font-extrabold text-slate-800 mb-1 truncate w-full text-center">${c.name}</div>
-                    <div class="text-3xl md:text-5xl font-black text-indigo-600 mb-3 md:mb-4" id="count-${c.name}">0</div>
-                    <div class="flex gap-1.5 w-full">
-                        <button onclick="changeVote('${c.name}', 1)" class="vote-btn flex-1 bg-slate-900 text-white py-2 md:py-3 rounded-xl text-sm md:text-lg font-bold shadow-md">+1</button>
-                        <button onclick="changeVote('${c.name}', -1)" class="vote-btn w-10 md:w-12 bg-slate-100 text-slate-400 rounded-xl font-bold">-</button>
-                    </div>
-                `;
-                grid.appendChild(item);
-            });
             updateSyncStatus('success');
         }
 
