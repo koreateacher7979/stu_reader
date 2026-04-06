@@ -2,395 +2,384 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>전교학생회장 선거 개표 시스템</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전교회장선거 실시간 개표 대시보드</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
-        body { 
-            font-family: 'Pretendard', sans-serif; 
-            background-color: #f1f5f9;
-            overflow: hidden; /* 전체 스크롤 방지 */
-        }
-        .main-container {
-            height: calc(100vh - 64px); /* 헤더 제외 높이 */
-        }
-        .scroll-area {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 transparent;
-        }
-        .scroll-area::-webkit-scrollbar { width: 6px; }
-        .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-        .candidate-card { transition: all 0.2s ease; }
-        .vote-btn:active { transform: scale(0.98); }
-        
-        /* 개표 화면 전용 컴팩트 스타일 */
-        .tally-card {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            min-height: 0;
-        }
-
-        .category-group {
-            background-color: rgba(255, 255, 255, 0.4);
-            border-radius: 1.5rem;
-            padding: 1rem;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-        }
-
-        .loading-spinner {
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #4f46e5;
-            border-radius: 50%;
-            width: 14px;
-            height: 14px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; }
+        .winner-card { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+        .category-tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: 800; }
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); }
     </style>
 </head>
-<body class="h-screen flex flex-col">
+<body class="text-slate-900 pb-20">
 
-    <!-- Header (Fixed Height) -->
-    <header class="h-16 bg-slate-900 text-white px-6 flex items-center justify-between shadow-xl shrink-0">
-        <div class="flex items-center gap-3">
-            <span class="text-2xl">🗳️</span>
-            <h1 class="text-xl font-extrabold tracking-tight">전교학생회장 선거 개표 시스템</h1>
-        </div>
-        <div class="text-right">
-            <p class="text-[10px] md:text-xs opacity-70 font-medium">개발자: 가치있는 미래교육연구소 대표 김병찬</p>
-        </div>
-    </header>
-
-    <!-- Main Content (Adaptive Area) -->
-    <main class="main-container flex-1 p-4 md:p-6 overflow-hidden flex flex-col">
-        
-        <!-- Step 1: Settings -->
-        <section id="setup-section" class="bg-white rounded-3xl shadow-lg border border-slate-200 p-6 flex-1 flex flex-col justify-center max-w-4xl mx-auto w-full overflow-y-auto scroll-area">
-            <div class="mb-8 text-center">
-                <h2 class="text-3xl font-black text-slate-800 mb-2">시스템 연결 설정</h2>
-                <p class="text-slate-500">데이터 수합을 위한 정보를 입력해주세요.</p>
+    <!-- 상단 내비게이션 -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 px-4 py-3 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-200">
+                    <i class="fas fa-chart-line text-xl"></i>
+                </div>
+                <h1 class="text-xl font-extrabold tracking-tight">전교선거 <span class="text-blue-600">통합 대시보드</span></h1>
             </div>
+
+            <div class="flex flex-1 max-w-2xl w-full gap-2">
+                <input type="text" id="sheetUrl" placeholder="구글 스프레드시트 주소를 입력하세요..." 
+                    class="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none">
+                <button onclick="fetchData()" id="connectBtn" class="bg-blue-600 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 shadow-md transition-all shrink-0">
+                    데이터 연결
+                </button>
+            </div>
+
+            <div class="flex items-center gap-4 text-xs font-semibold text-slate-500 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+                <div class="flex items-center gap-2">
+                    <span id="refreshLabel">자동 갱신 OFF</span>
+                    <button onclick="toggleAutoRefresh()" id="refreshToggle" class="w-10 h-5 bg-slate-300 rounded-full relative transition-colors">
+                        <span id="toggleCircle" class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform"></span>
+                    </button>
+                </div>
+                <span id="lastUpdated" class="border-l pl-4 font-mono text-blue-600">Wait...</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- 초기 안내 화면 -->
+        <div id="welcomeScreen" class="py-32 text-center bg-white rounded-3xl border border-dashed border-slate-300 shadow-sm">
+            <div class="mb-6 inline-flex items-center justify-center w-24 h-24 bg-blue-50 text-blue-500 rounded-full">
+                <i class="fas fa-file-csv text-4xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-3 text-slate-800">선거 데이터 연동 대기 중</h2>
+            <p class="text-slate-500 max-w-lg mx-auto mb-8 px-6 leading-relaxed">
+                스프레드시트의 첫 번째 줄(헤더)에 다음 항목이 포함되어야 합니다:<br>
+                <span class="font-bold text-slate-700">학년, 반, 분야, 기호, 이름, 득표수</span>
+            </p>
+            <div class="inline-block text-left bg-slate-50 p-6 rounded-2xl text-sm text-slate-600 border border-slate-200">
+                <p class="font-bold text-blue-600 mb-2"><i class="fas fa-info-circle mr-2"></i>연결 전 필수 체크</p>
+                <ul class="space-y-1">
+                    <li>1. 시트 탭 이름이 <strong class="text-slate-900">'전체수합'</strong>인지 확인</li>
+                    <li>2. 공유 설정이 <strong class="text-slate-900">'링크가 있는 모든 사용자'</strong>인지 확인</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 메인 대시보드 (데이터 로드 후) -->
+        <div id="dashboard" class="hidden space-y-10">
             
-            <div class="space-y-5">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1 ml-1 uppercase">구글 앱스 스크립트 API URL</label>
-                    <input type="text" id="api-url" placeholder="https://script.google.com/macros/s/.../exec" 
-                        class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            <!-- 분야별 당선자 섹션 -->
+            <section>
+                <h3 class="text-lg font-bold text-slate-500 mb-4 flex items-center gap-2">
+                    <i class="fas fa-crown text-amber-500"></i> 각 분야별 최종 당선(예정)자
+                </h3>
+                <div id="winnerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 분야별 당선자 카드가 여기에 생성됩니다 -->
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1 ml-1 uppercase">연동할 구글 스프레드시트 URL</label>
-                    <input type="text" id="ss-url" placeholder="https://docs.google.com/spreadsheets/d/..." 
-                        class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1 ml-1">학년 선택</label>
-                        <select id="grade" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                            <option value="">학년</option>
-                            <script>for(let i=1; i<=6; i++) document.write(`<option value="${i}">${i}학년</option>`);</script>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1 ml-1">학급 선택</label>
-                        <select id="class" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                            <option value="">반</option>
-                            <script>for(let i=1; i<=15; i++) document.write(`<option value="${i}">${i}반</option>`);</script>
-                        </select>
-                    </div>
-                </div>
-                <button onclick="loadCandidates()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition shadow-xl transform active:scale-95 text-lg mt-4">
-                    데이터 동기화 및 시작하기
-                </button>
-            </div>
-        </section>
+            </section>
 
-        <!-- Step 2: Candidate Overview (Grid fits screen) -->
-        <section id="candidate-section" class="hidden flex-1 flex flex-col overflow-hidden">
-            <div class="flex justify-between items-end mb-4 shrink-0">
-                <div>
-                    <h2 class="text-2xl font-black text-slate-800">후보자 명단</h2>
-                    <p class="text-sm text-slate-500">입력된 데이터를 확인해 주세요.</p>
-                </div>
-                <button onclick="startVoting()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg transition transform active:scale-95">
-                    개표 시스템 가동
-                </button>
+            <!-- 분야 선택 탭 -->
+            <div class="flex items-center border-b border-slate-200 overflow-x-auto no-scrollbar gap-8" id="categoryTabs">
+                <!-- 탭이 동적으로 생성됩니다 -->
             </div>
-            <div id="candidate-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto scroll-area flex-1 pr-2">
-                <!-- Cards -->
-            </div>
-        </section>
 
-        <!-- Step 3: Voting Interface (Full screen Tally - Grouped by Category) -->
-        <section id="voting-section" class="hidden flex-1 flex flex-col overflow-hidden h-full">
-            <div class="flex justify-between items-center mb-4 shrink-0 bg-white p-3 md:p-4 rounded-3xl shadow-sm border border-slate-100">
-                <div>
-                    <h2 class="text-xl md:text-2xl font-black text-slate-900" id="current-class-display">0-0 개표중</h2>
-                    <div id="status-text" class="text-[10px] md:text-xs font-bold text-indigo-600 flex items-center gap-2 mt-0.5">
-                        ✓ 서버 연결됨
+            <!-- 상세 분석 섹션 -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <!-- 후보자별 득표수 그래프 -->
+                <div class="xl:col-span-2 bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                    <div class="flex items-center justify-between mb-8">
+                        <h3 class="text-xl font-extrabold text-slate-800" id="selectedCategoryTitle">전체 후보자별 득표</h3>
+                        <span class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">REAL-TIME</span>
+                    </div>
+                    <div id="voteBars" class="space-y-6">
+                        <!-- 막대 그래프가 여기에 생성됩니다 -->
                     </div>
                 </div>
-                <button id="finish-btn" onclick="endVoting()" class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold shadow-md transition text-sm">
-                    개표 종료
-                </button>
+
+                <!-- 집계 통계 요약 -->
+                <div class="space-y-6">
+                    <div class="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col justify-between h-full">
+                        <div>
+                            <p class="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">Participation</p>
+                            <h3 class="text-slate-800 text-lg font-bold mb-6">전체 개표 통계</h3>
+                        </div>
+                        <div class="space-y-6">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-500 font-medium">참여 학급</span>
+                                <span id="statClasses" class="text-3xl font-black text-blue-600">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-500 font-medium">누적 득표수</span>
+                                <span id="statVotes" class="text-3xl font-black text-slate-800">0</span>
+                            </div>
+                            <div class="pt-4 border-t border-slate-50">
+                                <div class="flex items-center gap-2 text-xs text-green-600 font-bold">
+                                    <i class="fas fa-sync-alt animate-spin"></i> 실시간 데이터 수신 중
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Tally Group Container: Area for grouped categories -->
-            <div id="vote-tally-grid" class="flex-1 flex flex-col gap-6 overflow-y-auto scroll-area pr-2">
-                <!-- Grouped Category Sections will be injected here -->
+            <!-- 학급별 원시 데이터 테이블 -->
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 class="font-bold text-slate-800"><i class="fas fa-table mr-2 text-blue-500"></i>학급별 상세 개표 현황</h3>
+                    <div class="text-xs text-slate-400">데이터를 입력 순서대로 나열합니다.</div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-white text-slate-500 font-bold border-b border-slate-100">
+                            <tr>
+                                <th class="px-6 py-4">학급</th>
+                                <th class="px-6 py-4">분야</th>
+                                <th class="px-6 py-4 text-center">기호</th>
+                                <th class="px-6 py-4">이름</th>
+                                <th class="px-6 py-4 text-right">득표수</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-50 text-slate-600">
+                            <!-- 테이블 행이 여기에 생성됩니다 -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
-            <div id="result-transfer-area" class="hidden shrink-0 mt-3 bg-slate-900 text-white p-4 md:p-5 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-3 animate-bounce">
-                <p class="font-bold text-sm">최종 개표가 완료되었습니다. 전체 수합본에 결과를 저장할까요?</p>
-                <button onclick="sendFinalResults()" class="bg-white text-slate-900 px-6 py-2.5 rounded-xl font-black shadow-lg hover:bg-indigo-50 transition text-sm">
-                    전교 합산 데이터 전송
-                </button>
-            </div>
-        </section>
-
+        </div>
     </main>
 
-    <!-- Custom Modal Replacement for Alert -->
-    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] hidden items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
-            <div id="modal-icon" class="text-5xl mb-4">📢</div>
-            <h3 id="modal-title" class="text-xl font-black mb-2 text-slate-800">알림</h3>
-            <p id="modal-body" class="text-slate-600 mb-6 text-sm leading-relaxed"></p>
-            <button onclick="closeModal()" id="modal-btn" class="w-full bg-slate-900 text-white py-3 rounded-2xl font-bold">확인</button>
-        </div>
-    </div>
-
-    <!-- Toast Message -->
-    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/95 text-white px-6 py-3 rounded-2xl shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none z-[300] text-sm font-bold">
-        메시지
-    </div>
-
     <script>
-        let candidates = [];
-        let votes = {};
-        let config = { grade: '', class: '', classCode: '', ssUrl: '' };
-        let isSyncing = false;
-        let pendingSync = false;
+        let autoRefreshInterval = null;
+        let globalRawData = [];
+        let currentTab = 'All';
+        const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.remove('opacity-0');
-            setTimeout(() => t.classList.add('opacity-0'), 2500);
+        function getCsvUrl(url) {
+            const idMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (!idMatch) return null;
+            return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/gviz/tq?tqx=out:csv&sheet=전체수합`;
         }
 
-        function openModal(title, body, icon = '📢', callback = null) {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-body').innerText = body;
-            document.getElementById('modal-icon').innerText = icon;
-            document.getElementById('modal-overlay').classList.remove('hidden');
-            document.getElementById('modal-overlay').classList.add('flex');
-            
-            const btn = document.getElementById('modal-btn');
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-            newBtn.addEventListener('click', () => {
-                closeModal();
-                if (callback) callback();
-            });
-        }
+        async function fetchData() {
+            const urlInput = document.getElementById('sheetUrl').value;
+            const csvUrl = getCsvUrl(urlInput);
 
-        function closeModal() {
-            document.getElementById('modal-overlay').classList.add('hidden');
-            document.getElementById('modal-overlay').classList.remove('flex');
-        }
-
-        async function loadCandidates() {
-            const apiUrl = document.getElementById('api-url').value;
-            const ssUrl = document.getElementById('ss-url').value;
-            const grade = document.getElementById('grade').value;
-            const cls = document.getElementById('class').value;
-
-            if(!apiUrl || !ssUrl || !grade || !cls) {
-                showToast("모든 설정값을 입력해야 합니다.");
+            if (!csvUrl) {
+                alert('올바른 구글 시트 주소를 입력해주세요.');
                 return;
             }
 
-            config.ssUrl = ssUrl;
-            config.grade = grade;
-            config.class = cls;
-            config.classCode = grade.padStart(2, '0') + cls.padStart(2, '0');
-
-            showToast("데이터를 동기화 중입니다...");
-
+            const btn = document.getElementById('connectBtn');
+            btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> 연결 중';
+            
             try {
-                const response = await fetch(`${apiUrl}?action=getCandidates&ssUrl=${encodeURIComponent(ssUrl)}`);
-                const result = await response.json();
+                const response = await fetch(csvUrl);
+                const text = await response.text();
                 
-                if(result.status === 'success') {
-                    candidates = result.data;
-                    displayCandidates();
-                    document.getElementById('setup-section').classList.add('hidden');
-                    document.getElementById('candidate-section').classList.remove('hidden');
-                    showToast("후보자 정보를 성공적으로 가져왔습니다.");
-                } else {
-                    openModal("연결 오류", result.message, "❌");
-                }
-            } catch (error) {
-                openModal("네트워크 오류", "앱스스크립트 URL과 권한 설정을 확인하세요.", "⚠️");
+                // CSV Parsing
+                const rows = text.split('\n').map(row => {
+                    const matches = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                    return matches ? matches.map(m => m.replace(/^"|"$/g, '')) : [];
+                }).filter(row => row.length > 0);
+
+                if (rows.length < 2) throw new Error('데이터가 충분하지 않습니다.');
+
+                const headers = rows[0].map(h => h.trim());
+                globalRawData = rows.slice(1).map(row => {
+                    const obj = {};
+                    headers.forEach((h, i) => obj[h] = row[i]);
+                    return obj;
+                });
+
+                processAndRender();
+                
+                document.getElementById('welcomeScreen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('lastUpdated').innerText = new Date().toLocaleTimeString();
+            } catch (err) {
+                console.error(err);
+                alert('데이터 로드 실패: "전체수합" 시트 존재 여부와 공유 설정을 확인하세요.');
+            } finally {
+                btn.innerHTML = '데이터 연결';
             }
         }
 
-        function displayCandidates() {
-            const grid = document.getElementById('candidate-grid');
+        function processAndRender() {
+            // 1. 모든 분야 추출
+            const categories = [...new Set(globalRawData.map(d => d['분야']))].filter(c => c);
+            renderTabs(categories);
+
+            // 2. 분야별 데이터 집계
+            const aggregated = {}; // { 분야: { "기호_이름": 총득표수 } }
+            const candidateInfo = {}; // { "기호_이름": { 기호, 이름 } }
+            
+            globalRawData.forEach(row => {
+                const cat = row['분야'];
+                const candKey = `${row['기호']}_${row['이름']}`;
+                const votes = parseInt(row['득표수']) || 0;
+
+                if (!aggregated[cat]) aggregated[cat] = {};
+                if (!aggregated[cat][candKey]) aggregated[cat][candKey] = 0;
+                
+                aggregated[cat][candKey] += votes;
+                candidateInfo[candKey] = { 기호: row['기호'], 이름: row['이름'] };
+            });
+
+            // 3. 당선자 그리드 생성
+            renderWinners(aggregated, candidateInfo);
+
+            // 4. 차트 및 통계 갱신
+            renderChart(aggregated, candidateInfo, categories);
+            
+            // 5. 원시 데이터 테이블
+            renderTable();
+
+            // 6. 집계 요약
+            const totalVotes = globalRawData.reduce((sum, r) => sum + (parseInt(r['득표수']) || 0), 0);
+            const totalClasses = [...new Set(globalRawData.map(d => `${d['학년']}-${d['반']}`))].length;
+            document.getElementById('statClasses').innerText = totalClasses;
+            document.getElementById('statVotes').innerText = totalVotes.toLocaleString();
+        }
+
+        function renderTabs(categories) {
+            const container = document.getElementById('categoryTabs');
+            const prevTab = currentTab;
+            
+            container.innerHTML = `<button onclick="setTab('All')" class="pb-3 px-2 text-sm transition-all ${currentTab === 'All' ? 'category-tab-active' : 'text-slate-400'}">전체보기</button>`;
+            
+            categories.forEach(cat => {
+                container.innerHTML += `
+                    <button onclick="setTab('${cat}')" class="pb-3 px-2 text-sm transition-all ${currentTab === cat ? 'category-tab-active' : 'text-slate-400'}">
+                        ${cat}
+                    </button>
+                `;
+            });
+        }
+
+        function setTab(cat) {
+            currentTab = cat;
+            processAndRender();
+        }
+
+        function renderWinners(aggregated, candidateInfo) {
+            const grid = document.getElementById('winnerGrid');
             grid.innerHTML = '';
-            candidates.forEach(c => {
-                const card = document.createElement('div');
-                card.className = "candidate-card bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between";
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[10px] font-black tracking-widest">NO.${c.number}</span>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase">${c.category}</span>
+
+            for (const [cat, cands] of Object.entries(aggregated)) {
+                const sorted = Object.entries(cands).sort((a, b) => b[1] - a[1]);
+                const winnerKey = sorted[0][0];
+                const winnerVotes = sorted[0][1];
+                const info = candidateInfo[winnerKey];
+
+                grid.innerHTML += `
+                    <div class="winner-card p-6 rounded-3xl text-white shadow-xl shadow-orange-100 flex items-center justify-between relative overflow-hidden group">
+                        <i class="fas fa-crown absolute -right-2 -bottom-2 text-white/20 text-7xl transition-transform group-hover:scale-110"></i>
+                        <div class="relative z-10">
+                            <p class="text-orange-100 font-bold text-xs uppercase mb-1">${cat} 1위</p>
+                            <h4 class="text-3xl font-black mb-2">${info.이름} <span class="text-lg font-medium">(기호 ${info.기호})</span></h4>
+                            <p class="text-xl font-bold font-mono">${winnerVotes.toLocaleString()} <span class="text-sm opacity-80">표 획득</span></p>
                         </div>
-                        <h3 class="text-lg font-black text-slate-800 mb-2">${c.name} (${c.gender})</h3>
-                        <p class="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            ${c.pledge}
-                        </p>
                     </div>
                 `;
-                grid.appendChild(card);
-            });
+            }
         }
 
-        function startVoting() {
-            document.getElementById('candidate-section').classList.add('hidden');
-            document.getElementById('voting-section').classList.remove('hidden');
-            document.getElementById('current-class-display').innerText = `${config.grade}학년 ${config.class}반 개표 현황`;
+        function renderChart(aggregated, candidateInfo, categories) {
+            const container = document.getElementById('voteBars');
+            container.innerHTML = '';
+            
+            let displayData = [];
+            document.getElementById('selectedCategoryTitle').innerText = currentTab === 'All' ? '전체 분야별 득표 현황' : `[${currentTab}] 부문 득표 현황`;
 
-            const mainGrid = document.getElementById('vote-tally-grid');
-            mainGrid.innerHTML = '';
-
-            // 1. 분야별 그룹화 (Group by category)
-            const groupedCandidates = {};
-            candidates.forEach(c => {
-                if (!groupedCandidates[c.category]) {
-                    groupedCandidates[c.category] = [];
+            if (currentTab === 'All') {
+                // 전체보기일 경우 모든 분야의 후보자를 리스트업
+                for (const cat in aggregated) {
+                    for (const [key, votes] of Object.entries(aggregated[cat])) {
+                        displayData.push({ cat, ...candidateInfo[key], votes });
+                    }
                 }
-                groupedCandidates[c.category].push(c);
-            });
-
-            // 2. 그룹별 섹션 생성
-            for (const category in groupedCandidates) {
-                const section = document.createElement('div');
-                section.className = "category-group shadow-sm";
-                
-                const title = document.createElement('h3');
-                title.className = "text-sm md:text-base font-black text-slate-600 mb-3 ml-1 flex items-center gap-2";
-                title.innerHTML = `<span class="w-1.5 h-4 bg-indigo-500 rounded-full"></span> ${category}`;
-                section.appendChild(title);
-
-                const itemGrid = document.createElement('div');
-                const catCandidates = groupedCandidates[category];
-                
-                // 그룹 내 후보자 수에 따른 그리드 조절
-                if (catCandidates.length === 1) {
-                    itemGrid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3";
-                } else if (catCandidates.length <= 4) {
-                    itemGrid.className = "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3";
-                } else {
-                    itemGrid.className = "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2";
+            } else {
+                // 특정 탭일 경우 해당 분야만
+                if (aggregated[currentTab]) {
+                    for (const [key, votes] of Object.entries(aggregated[currentTab])) {
+                        displayData.push({ cat: currentTab, ...candidateInfo[key], votes });
+                    }
                 }
+            }
 
-                catCandidates.forEach(c => {
-                    votes[c.name] = 0;
-                    const card = document.createElement('div');
-                    card.className = "bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-slate-100 tally-card relative";
-                    card.innerHTML = `
-                        <div class="text-[9px] md:text-[10px] text-indigo-500 font-black mb-0.5 uppercase tracking-tighter">기호 ${c.number}번</div>
-                        <div class="text-sm md:text-lg font-extrabold text-slate-800 mb-1 truncate w-full text-center">${c.name}</div>
-                        <div class="text-3xl md:text-5xl font-black text-indigo-600 mb-3 md:mb-4" id="count-${c.name}">0</div>
-                        <div class="flex gap-1.5 w-full">
-                            <button onclick="changeVote('${c.name}', 1)" class="vote-btn flex-1 bg-slate-900 text-white py-2 md:py-3 rounded-xl text-sm md:text-lg font-bold shadow-md">+1</button>
-                            <button onclick="changeVote('${c.name}', -1)" class="vote-btn w-10 md:w-12 bg-slate-100 text-slate-400 rounded-xl font-bold">-</button>
+            displayData.sort((a, b) => b.votes - a.votes);
+            const maxVotes = Math.max(...displayData.map(d => d.votes), 1);
+
+            displayData.forEach((d, idx) => {
+                const pct = (d.votes / maxVotes) * 100;
+                const barColor = COLORS[idx % COLORS.length];
+                container.innerHTML += `
+                    <div>
+                        <div class="flex justify-between items-end mb-2">
+                            <div>
+                                <span class="text-[10px] font-bold text-slate-400 block">${d.cat}</span>
+                                <span class="font-bold text-slate-700">${d.이름} <span class="text-slate-400 font-medium ml-1">기호 ${d.기호}</span></span>
+                            </div>
+                            <span class="font-black text-slate-900">${d.votes.toLocaleString()}표</span>
                         </div>
-                    `;
-                    itemGrid.appendChild(card);
-                });
-                
-                section.appendChild(itemGrid);
-                mainGrid.appendChild(section);
-            }
-
-            updateSyncStatus('success');
-        }
-
-        async function changeVote(name, amount) {
-            if (amount < 0 && votes[name] <= 0) return;
-            votes[name] += amount;
-            document.getElementById(`count-${name}`).innerText = votes[name];
-            syncWithServer();
-        }
-
-        function updateSyncStatus(status) {
-            const statusEl = document.getElementById('status-text');
-            if (status === 'syncing') {
-                statusEl.innerHTML = `<span class="loading-spinner"></span> 서버에 기록 중...`;
-                statusEl.className = "text-[10px] md:text-xs font-bold text-indigo-500 flex items-center gap-2 mt-1";
-            } else if (status === 'success') {
-                statusEl.innerHTML = `✓ 모든 득표 실시간 저장됨`;
-                statusEl.className = "text-[10px] md:text-xs font-bold text-emerald-500 flex items-center gap-2 mt-1";
-            } else if (status === 'error') {
-                statusEl.innerHTML = `⚠️ 저장 실패 (인터넷 확인)`;
-                statusEl.className = "text-[10px] md:text-xs font-bold text-red-500 flex items-center gap-2 mt-1";
-            }
-        }
-
-        async function syncWithServer() {
-            if (isSyncing) { pendingSync = true; return; }
-            isSyncing = true;
-            updateSyncStatus('syncing');
-
-            const payload = {
-                action: 'saveResults',
-                ssUrl: config.ssUrl,
-                classCode: config.classCode,
-                grade: config.grade,
-                class: config.class,
-                votes: votes
-            };
-
-            try {
-                const response = await fetch(document.getElementById('api-url').value, {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                updateSyncStatus(result.status === 'success' ? 'success' : 'error');
-            } catch (error) {
-                updateSyncStatus('error');
-            } finally {
-                isSyncing = false;
-                if (pendingSync) { pendingSync = false; syncWithServer(); }
-            }
-        }
-
-        function endVoting() {
-            openModal("개표 종료", "현재까지의 득표수를 최종 확정하시겠습니까? 종료 후에는 수정할 수 없습니다.", "🏁", () => {
-                document.getElementById('result-transfer-area').classList.remove('hidden');
-                document.getElementById('finish-btn').classList.add('hidden');
-                document.querySelectorAll('.vote-btn').forEach(btn => {
-                    btn.disabled = true;
-                    btn.classList.add('opacity-30', 'cursor-not-allowed');
-                });
+                        <div class="w-full bg-slate-100 h-6 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-1000 ease-out relative" 
+                                 style="width: ${pct}%; background-color: ${barColor}; min-width: 4px;">
+                                <div class="absolute inset-0 bg-white/20 animate-pulse-slow"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
             });
         }
 
-        async function sendFinalResults() {
-            showToast("전체 합산 시트에 기록 중...");
-            await syncWithServer();
-            openModal("전송 완료", "본 학급의 개표 결과가 전교 합산 시트에 안전하게 반영되었습니다.", "✅", () => {
-                location.reload();
+        function renderTable() {
+            const body = document.getElementById('tableBody');
+            body.innerHTML = '';
+            
+            // 학년-반 순으로 정렬하여 표시
+            const sortedData = [...globalRawData].sort((a, b) => {
+                if (a['학년'] !== b['학년']) return a['학년'] - b['학년'];
+                if (a['반'] !== b['반']) return a['반'] - b['반'];
+                return 0;
             });
+
+            sortedData.forEach(row => {
+                body.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-6 py-4 font-bold text-slate-900">${row['학년']}-${row['반']}</td>
+                        <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-xs">${row['분야']}</span></td>
+                        <td class="px-6 py-4 text-center font-mono">${row['기호']}</td>
+                        <td class="px-6 py-4 font-semibold text-blue-600">${row['이름']}</td>
+                        <td class="px-6 py-4 text-right font-black">${parseInt(row['득표수']).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function toggleAutoRefresh() {
+            const toggle = document.getElementById('refreshToggle');
+            const circle = document.getElementById('toggleCircle');
+            const label = document.getElementById('refreshLabel');
+            
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                toggle.classList.replace('bg-blue-600', 'bg-slate-300');
+                circle.style.transform = 'translateX(0)';
+                label.innerText = "자동 갱신 OFF";
+            } else {
+                if (!document.getElementById('sheetUrl').value) {
+                    alert('시트 주소를 먼저 입력해주세요.');
+                    return;
+                }
+                autoRefreshInterval = setInterval(fetchData, 10000);
+                toggle.classList.replace('bg-slate-300', 'bg-blue-600');
+                circle.style.transform = 'translateX(1.25rem)';
+                label.innerText = "자동 갱신 ON (10s)";
+                fetchData();
+            }
         }
     </script>
 </body>
